@@ -1,6 +1,12 @@
 
 import unittest
-from structured_analyzer import parse_log_line, analyze_logs
+from collections import Counter
+
+from structured_analyzer import (
+    parse_log_line,
+    analyze_logs,
+    rank_errors,
+)
 
 
 class TestStructuredAnalyzer(unittest.TestCase):
@@ -11,14 +17,21 @@ class TestStructuredAnalyzer(unittest.TestCase):
         )
 
         self.assertEqual(result["level"], "ERROR")
-        self.assertEqual(result["timestamp"], "2026-10-20 10:30:45")
-        self.assertEqual(result["message"], "Database unavailable")
+        self.assertEqual(
+            result["timestamp"],
+            "2026-10-20 10:30:45",
+        )
+        self.assertEqual(
+            result["message"],
+            "Database unavailable",
+        )
 
     def test_parses_line_without_timestamp(self):
         result = parse_log_line("INFO: Application started")
 
         self.assertEqual(result["level"], "INFO")
         self.assertIsNone(result["timestamp"])
+        self.assertEqual(result["message"], "Application started")
 
     def test_groups_repeated_errors(self):
         logs = [
@@ -36,7 +49,41 @@ class TestStructuredAnalyzer(unittest.TestCase):
         self.assertNotIn("Request received", counts)
 
     def test_ignores_unrecognized_lines(self):
-        self.assertIsNone(parse_log_line("This is not a standard log"))
+        result = parse_log_line("This is not a standard log")
+
+        self.assertIsNone(result)
+
+    def test_ranks_errors_by_frequency(self):
+        counts = Counter({
+            "API timeout": 2,
+            "Database unavailable": 5,
+            "Service stopped": 1,
+        })
+
+        ranked = rank_errors(counts)
+
+        self.assertEqual(
+            ranked,
+            [
+                ("Database unavailable", 5),
+                ("API timeout", 2),
+                ("Service stopped", 1),
+            ],
+        )
+
+    def test_handles_equal_error_counts(self):
+        counts = Counter({
+            "API timeout": 2,
+            "Database unavailable": 2,
+        })
+
+        ranked = rank_errors(counts)
+
+        self.assertEqual(len(ranked), 2)
+        self.assertEqual(
+            {count for _, count in ranked},
+            {2},
+        )
 
 
 if __name__ == "__main__":
