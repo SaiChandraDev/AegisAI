@@ -15,6 +15,7 @@ LOG_PATTERN = re.compile(
 
 
 def parse_log_line(line):
+    """Parse a log line into timestamp, level, and message."""
     match = LOG_PATTERN.match(line.strip())
 
     if not match:
@@ -23,13 +24,17 @@ def parse_log_line(line):
     data = match.groupdict()
     data["level"] = data["level"].upper()
     data["message"] = data["message"].strip()
+
     return data
 
 
 def analyze_logs(lines):
+    """Parse log lines and count ERROR and CRITICAL messages."""
     parsed_logs = []
+
     for line in lines:
         parsed = parse_log_line(line)
+
         if parsed is not None:
             parsed_logs.append(parsed)
 
@@ -42,18 +47,25 @@ def analyze_logs(lines):
     return parsed_logs, error_counts
 
 
+def rank_errors(error_counts):
+    """Rank errors from most frequent to least frequent."""
+    return error_counts.most_common()
+
+
 def main():
     with LOG_FILE.open("r", encoding="utf-8") as file:
         logs, error_counts = analyze_logs(file)
 
     print(f"Parsed log entries: {len(logs)}")
-    print("Repeated error summary:")
+    print("Error priority summary:")
 
-    if not error_counts:
+    ranked_errors = rank_errors(error_counts)
+
+    if not ranked_errors:
         print("No errors found.")
         return
 
-    for message, count in error_counts.most_common():
+    for message, count in ranked_errors:
         print(f"{count}x - {message}")
 
 
