@@ -1,4 +1,3 @@
-
 import re
 from collections import Counter
 from pathlib import Path
@@ -50,6 +49,41 @@ def analyze_logs(lines):
 def rank_errors(error_counts):
     """Rank errors from most frequent to least frequent."""
     return error_counts.most_common()
+
+
+def extract_log_context(logs, error_index, window=2):
+    """
+    Return log entries surrounding a target error.
+
+    Args:
+        logs: List of parsed log entries.
+        error_index: Index of the error in the list.
+        window: Number of entries to include on each side.
+
+    Returns:
+        A list containing the surrounding entries and the error.
+
+    Raises:
+        TypeError: If the index or window is not an integer.
+        ValueError: If the window is negative.
+        IndexError: If the error index is out of range.
+    """
+    if not isinstance(error_index, int) or isinstance(error_index, bool):
+        raise TypeError("error_index must be an integer")
+
+    if not isinstance(window, int) or isinstance(window, bool):
+        raise TypeError("window must be an integer")
+
+    if window < 0:
+        raise ValueError("window cannot be negative")
+
+    if not 0 <= error_index < len(logs):
+        raise IndexError("error_index is outside the logs list")
+
+    start = max(0, error_index - window)
+    end = min(len(logs), error_index + window + 1)
+
+    return logs[start:end]
 
 
 def main():
