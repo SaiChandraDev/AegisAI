@@ -1,4 +1,3 @@
-
 import unittest
 from collections import Counter
 
@@ -6,6 +5,7 @@ from structured_analyzer import (
     parse_log_line,
     analyze_logs,
     rank_errors,
+    extract_log_context,
 )
 
 
@@ -84,6 +84,113 @@ class TestStructuredAnalyzer(unittest.TestCase):
             {count for _, count in ranked},
             {2},
         )
+
+    def test_extracts_context_before_and_after_error(self):
+        raw_logs = [
+            "INFO: Application started",
+            "INFO: Database connection initializing",
+            "WARNING: Database response is slow",
+            "ERROR: Database connection failed",
+            "INFO: Retry attempt started",
+            "INFO: Retry attempt completed",
+        ]
+
+        logs, _ = analyze_logs(raw_logs)
+
+        context = extract_log_context(
+            logs,
+            error_index=3,
+            window=2,
+        )
+
+        self.assertEqual(
+            [entry["message"] for entry in context],
+            [
+                "Database connection initializing",
+                "Database response is slow",
+                "Database connection failed",
+                "Retry attempt started",
+                "Retry attempt completed",
+            ],
+        )
+
+    def test_extracts_context_at_start_of_logs(self):
+        raw_logs = [
+            "ERROR: Database unavailable",
+            "INFO: Retry started",
+            "INFO: Retry completed",
+        ]
+
+        logs, _ = analyze_logs(raw_logs)
+
+        context = extract_log_context(
+            logs,
+            error_index=0,
+            window=2,
+        )
+
+        self.assertEqual(len(context), 3)
+        self.assertEqual(
+            context[0]["message"],
+            "Database unavailable",
+        )
+
+    def test_extracts_context_at_end_of_logs(self):
+        raw_logs = [
+            "INFO: Application started",
+            "INFO: Request received",
+            "ERROR: API timeout",
+        ]
+
+        logs, _ = analyze_logs(raw_logs)
+
+        context = extract_log_context(
+            logs,
+            error_index=2,
+            window=2,
+        )
+
+        self.assertEqual(len(context), 3)
+        self.assertEqual(
+            context[-1]["message"],
+            "API timeout",
+        )
+
+    def test_extracts_error_only_when_window_is_zero(self):
+        raw_logs = [
+            "INFO: Application started",
+            "ERROR: API timeout",
+            "INFO: Retry started",
+        ]
+
+        logs, _ = analyze_logs(raw_logs)
+
+        context = extract_log_context(
+            logs,
+            error_index=1,
+            window=0,
+        )
+
+        self.assertEqual(len(context), 1)
+        self.assertEqual(context[0]["message"], "API timeout")
+
+    def test_rejects_negative_window(self):
+        logs, _ = analyze_logs(["ERROR: API timeout"])
+
+        with self.assertRaises(ValueError):
+            extract_log_context(logs, error_index=0, window=-1)
+
+    def test_rejects_out_of_range_index(self):
+        logs, _ = analyze_logs(["ERROR: API timeout"])
+
+        with self.assertRaises(IndexError):
+            extract_log_context(logs, error_index=5)
+
+    def test_rejects_non_integer_index(self):
+        logs, _ = analyze_logs(["ERROR: API timeout"])
+
+        with self.assertRaises(TypeError):
+            extract_log_context(logs, error_index="0")
 
 
 if __name__ == "__main__":
